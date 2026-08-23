@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0">
+
+    <title>Weather</title>
+
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+
+        body {
+
+            margin: 0;
+
+            font-family: Arial, sans-serif;
+
+            background: white;
+
+            color: #222;
+
+        }
+
+
+        .weather-display {
+
+            width: 100vw;
+
+            min-height: 100vh;
+
+            padding: 30px 4vw 50px;
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 50px;
+
+        }
+
+
+        .day {
+
+            width: 100%;
+
+        }
+
+
+        .day-title {
+
+            font-size: clamp(36px, 5vw, 64px);
+
+            font-weight: bold;
+
+            margin-bottom: 10px;
+
+        }
+
+
+        .graph {
+
+            width: 100%;
+
+            height: 380px;
+
+            display: block;
+
+        }
+
+
+        .weather-icons {
+
+            display: flex;
+
+            justify-content: space-between;
+
+            font-size: clamp(20px, 2.5vw, 36px);
+
+            margin-top: 5px;
+
+            padding-left: 55px;
+
+        }
+
+
+        .time-labels {
+
+            display: flex;
+
+            justify-content: space-between;
+
+            font-size: clamp(16px, 1.8vw, 25px);
+
+            color: #555;
+
+            margin-top: 5px;
+
+            padding-left: 55px;
+
+        }
+
+
+        .status {
+
+            text-align: center;
+
+            font-size: 24px;
+
+            color: #777;
+
+            padding: 20px;
+
+        }
+
+
+        .error {
+
+            color: #b00020;
+
+        }
+
+
+        @media (max-width: 600px) {
+
+            .weather-display {
+
+                padding: 20px 15px 30px;
+
+                gap: 35px;
+
+            }
+
+
+            .graph {
+
+                height: 300px;
+
+            }
+
+
+            .weather-icons {
+
+                font-size: 20px;
+
+                padding-left: 40px;
+
+            }
+
+
+            .time-labels {
+
+                font-size: 13px;
+
+                padding-left: 40px;
+
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+    <main class="weather-display">
+
+
+        <!-- TODAY -->
+
+        <section class="day">
+
+            <div class="day-title">
+                TODAY
+            </div>
+
+
+            <svg
+                id="today-graph"
+                class="graph"
+                viewBox="0 0 1000 300"
+                preserveAspectRatio="none">
+            </svg>
+
+
+            <div
+                id="today-icons"
+                class="weather-icons">
+            </div>
+
+
+            <div
+                id="today-times"
+                class="time-labels">
+            </div>
+
+        </section>
+
+
+
+        <!-- TOMORROW -->
+
+        <section class="day">
+
+            <div class="day-title">
+                TOMORROW
+            </div>
+
+
+            <svg
+                id="tomorrow-graph"
+                class="graph"
+                viewBox="0 0 1000 300"
+                preserveAspectRatio="none">
+            </svg>
+
+
+            <div
+                id="tomorrow-icons"
+                class="weather-icons">
+            </div>
+
+
+            <div
+                id="tomorrow-times"
+                class="time-labels">
+            </div>
+
+        </section>
+
+
+        <div
+            id="status"
+            class="status">
+            Loading weather...
+        </div>
+
+
+    </main>
+
+
+
+    <script>
+
+
+        /*
+         * =========================================================
+         * LOCATION
+         * =========================================================
+         *
+         * CHANGE THESE TWO NUMBERS.
+         *
+         * Example:
+         *
+         * Toronto:
+         * latitude  = 43.6532
+         * longitude = -79.3832
+         *
+         * Negative longitude means west of Greenwich.
+         */
+
+
+        const LATITUDE = 43.6532;
+
+        const LONGITUDE = -79.3832;
+
+
+
+        /*
+         * =========================================================
+         * OPEN-METEO API
+         * =========================================================
+         *
+         * We request:
+         *
+         * precipitation_probability
+         * weather_code
+         * is_day
+         *
+         * "timezone=auto" tells Open-Meteo to return
+         * times in the location's local timezone.
+         */
+
+
+        const API_URL =
+            "https://api.open-meteo.com/v1/forecast" +
+            `?latitude=${LATITUDE}` +
+            `&longitude=${LONGITUDE}` +
+            "&hourly=" +
+            "precipitation_probability," +
+            "weather_code," +
+            "is_day" +
+            "&forecast_days=2" +
+            "&timezone=auto";
+
+
+
+        /*
+         * =========================================================
+         * SVG HELPER
+         * =========================================================
+         */
+
+
+        function createSvgElement(
+            type,
+            attributes
+        ) {
+
+
+            const element =
+                document.createElementNS(
+                    "http://www.w3.org/2000/svg",
+                    type
+                );
+
+
+            for (
+                const [name, value]
+                of Object.entries(attributes)
+            ) {
+
+                element.setAttribute(
+                    name,
+                    value
+                );
+
+            }
+
+
+            return element;
+
+        }
+
+
+
+        /*
+         * =========================================================
+         * WEATHER ICON
+         * =========================================================
+         *
+         * Open-Meteo gives us a WMO weather code.
+         *
+         * We convert that into a simple emoji.
+         *
+         * This is deliberately simplified.
+         */
+
+
+        function weatherIcon(
+            weatherCode,
+            isDay
+        ) {
+
+
+            /*
+             * Clear
+             */
+
+            if (weatherCode === 0) {
+
+                return isDay
+                    ? "☀️"
+                    : "🌙";
+
+            }
+
+
+            /*
+             * Mainly clear / partly cloudy
+             */
+
+            if (
+                weatherCode === 1 ||
+                weatherCode === 2
+            ) {
+
+                return isDay
+                    ? "🌤️"
+                    : "🌙";
+
+            }
+
+
+            /*
+             * Overcast
+             */
+
+            if (weatherCode === 3) {
+
+                return "☁️";
+
+            }
+
+
+            /*
+             * Fog
+             */
+
+            if (
+                weatherCode === 45 ||
+                weatherCode === 48
+            ) {
+
+                return "🌫️";
+
+            }
+
+
+            /*
+             * Drizzle
+             */
+
+            if (
+                weatherCode >= 51 &&
+                weatherCode <= 57
+            ) {
+
+                return "🌦️";
+
+            }
+
+
+            /*
+             * Rain
+             */
+
+            if (
+                weatherCode >= 61 &&
+                weatherCode <= 67
+            ) {
+
+                return "🌧️";
+
+            }
+
+
+            /*
+             * Snow
+             */
+
+            if (
+                weatherCode >= 71 &&
+                weatherCode <= 77
+            ) {
+
+                return "❄️";
+
+            }
+
+
+            /*
+             * Rain showers
+             */
+
+            if (
+                weatherCode >= 80 &&
+                weatherCode <= 82
+            ) {
+
+                return "🌧️";
+
+            }
+
+
+            /*
+             * Snow showers
+             */
+
+            if (
+                weatherCode === 85 ||
+                weatherCode === 86
+            ) {
+
+                return "🌨️";
+
+            }
+
+
+            /*
+             * Thunderstorm
+             */
+
+            if (
+                weatherCode >= 95
+            ) {
+
+                return "⛈️";
+
+            }
+
+
+            return "🌤️";
+
+        }
+
+
+
+        /*
+         * =========================================================
+         * DRAW GRAPH
+         * =========================================================
+         */
+
+
+        function drawGraph(
+            elementId,
+            values,
+            showNow,
+            currentHourIndex
+        ) {
+
+
+            const svg =
+                document.getElementById(
+                    elementId
+                );
+
+
+            svg.innerHTML = "";
+
+
+            /*
+             * SVG coordinate system.
+             */
+
+
+            const width = 1000;
+
+            const height = 300;
+
+            const left = 60;
+
+            const right = 10;
+
+            const top = 35;
+
+            const bottom = 260;
+
+
+            const graphWidth =
+                width - left - right;
+
+
+            const graphHeight =
+                bottom - top;
+
+
+
+            /*
+             * Convert precipitation probabilities
+             * into SVG coordinates.
+             */
+
+
+            const points =
+                values.map(
+                    (value, index) => {
+
+
+                        const x =
+                            left +
+                            index *
+                            (
+                                graphWidth /
+                                (values.length - 1)
+                            );
+
+
+                        const y =
+                            bottom -
+                            value / 100 * graphHeight;
+
+
+                        return [x, y];
+
+                    }
+                );
+
+
+
+            /*
+             * =====================================================
+             * REFERENCE LINES
+             * =====================================================
+             */
+
+
+            const referenceLevels = [
+
+                0,
+                0.25,
+                0.50,
+                0.75,
+                1.00
+
+            ];
+
+
+            referenceLevels.forEach(
+                value => {
+
+
+                    const y =
+                        bottom -
+                        value * graphHeight;
+
+
+                    const line =
+                        createSvgElement(
+                            "line",
+                            {
+
+                                x1: left,
+                                y1: y,
+
+                                x2: width - right,
+                                y2: y,
+
+                                stroke: "#eeeeee",
+
+                                "stroke-width": 2
+
+                            }
+                        );
+
+
+                    svg.appendChild(line);
+
+
+                    /*
+                     * Percentage label.
+                     */
+
+
+                    const label =
+                        createSvgElement(
+                            "text",
+                            {
+
+                                x: 5,
+
+                                y: y + 7,
+
+                                fill: "#999999",
+
+                                "font-size": 20,
+
+                                "font-family":
+                                    "Arial",
+
+                                "text-anchor":
+                                    "start"
+
+                            }
+                        );
+
+
+                    label.textContent =
+                        `${Math.round(
+                            value * 100
+                        )}%`;
+
+
+                    svg.appendChild(label);
+
+                }
+            );
+
+
+
+            /*
+             * =====================================================
+             * BASELINE
+             * =====================================================
+             */
+
+
+            const baseline =
+                createSvgElement(
+                    "line",
+                    {
+
+                        x1: left,
+
+                        y1: bottom,
+
+                        x2: width - right,
+
+                        y2: bottom,
+
+                        stroke: "#cccccc",
+
+                        "stroke-width": 3
+
+                    }
+                );
+
+
+            svg.appendChild(baseline);
+
+
+
+            /*
+             * =====================================================
+             * STRAIGHT-LINE GRAPH
+             * =====================================================
+             */
+
+
+            let path =
+                `M ${points[0][0]} ` +
+                `${points[0][1]}`;
+
+
+            for (
+                let i = 1;
+                i < points.length;
+                i++
+            ) {
+
+                path +=
+                    ` L ${points[i][0]} ` +
+                    `${points[i][1]}`;
+
+            }
+
+
+
+            /*
+             * =====================================================
+             * FILLED AREA
+             * =====================================================
+             */
+
+
+            const fillPath =
+                path +
+                ` L ${points[points.length - 1][0]} ${bottom}` +
+                ` L ${points[0][0]} ${bottom}` +
+                ` Z`;
+
+
+            const fill =
+                createSvgElement(
+                    "path",
+                    {
+
+                        d: fillPath,
+
+                        fill: "#4285F4",
+
+                        "fill-opacity": 0.15,
+
+                        stroke: "none"
+
+                    }
+                );
+
+
+            svg.appendChild(fill);
+
+
+
+            /*
+             * =====================================================
+             * GRAPH LINE
+             * =====================================================
+             */
+
+
+            const graphLine =
+                createSvgElement(
+                    "path",
+                    {
+
+                        d: path,
+
+                        fill: "none",
+
+                        stroke: "#4285F4",
+
+                        "stroke-width": 6,
+
+                        "stroke-linecap":
+                            "round",
+
+                        "stroke-linejoin":
+                            "round"
+
+                    }
+                );
+
+
+            svg.appendChild(graphLine);
+
+
+
+            /*
+             * =====================================================
+             * DATA POINTS
+             * =====================================================
+             */
+
+
+            points.forEach(
+                ([x, y]) => {
+
+
+                    const point =
+                        createSvgElement(
+                            "circle",
+                            {
+
+                                cx: x,
+
+                                cy: y,
+
+                                r: 4,
+
+                                fill: "#4285F4"
+
+                            }
+                        );
+
+
+                    svg.appendChild(point);
+
+                }
+            );
+
+
+
+            /*
+             * =====================================================
+             * NOW INDICATOR
+             * =====================================================
+             *
+             * Only draw this for TODAY.
+             */
+
+
+            if (
+                showNow &&
+                currentHourIndex >= 0 &&
+                currentHourIndex < values.length
+            ) {
+
+
+                const nowX =
+                    left +
+                    currentHourIndex *
+                    (
+                        graphWidth /
+                        (values.length - 1)
+                    );
+
+
+
+                /*
+                 * Vertical line.
+                 */
+
+
+                const nowLine =
+                    createSvgElement(
+                        "line",
+                        {
+
+                            x1: nowX,
+
+                            y1: top,
+
+                            x2: nowX,
+
+                            y2: bottom,
+
+                            stroke: "#777777",
+
+                            "stroke-width": 3,
+
+                            "stroke-dasharray":
+                                "8 8"
+
+                        }
+                    );
+
+
+                svg.appendChild(nowLine);
+
+
+
+                /*
+                 * NOW text.
+                 */
+
+
+                const nowLabel =
+                    createSvgElement(
+                        "text",
+                        {
+
+                            x: nowX,
+
+                            y: 22,
+
+                            fill: "#555555",
+
+                            "font-size": 22,
+
+                            "font-family":
+                                "Arial",
+
+                            "font-weight":
+                                "bold",
+
+                            "text-anchor":
+                                "middle"
+
+                        }
+                    );
+
+
+                nowLabel.textContent =
+                    "NOW";
+
+
+                svg.appendChild(nowLabel);
+
+            }
+
+        }
+
+
+
+        /*
+         * =========================================================
+         * CREATE ICONS
+         * =========================================================
+         */
+
+
+        function createIcons(
+            elementId,
+            weatherCodes,
+            isDay
+        ) {
+
+
+            const container =
+                document.getElementById(
+                    elementId
+                );
+
+
+            container.innerHTML = "";
+
+
+            weatherCodes.forEach(
+                (code, index) => {
+
+
+                    const span =
+                        document.createElement(
+                            "span"
+                        );
+
+
+                    span.textContent =
+                        weatherIcon(
+                            code,
+                            isDay[index]
+                        );
+
+
+                    container.appendChild(
+                        span
+                    );
+
+                }
+            );
+
+        }
+
+
+
+        /*
+         * =========================================================
+         * CREATE TIME LABELS
+         * =========================================================
+         */
+
+
+        function formatHour(
+            date
+        ) {
+
+
+            let hour =
+                date.getHours();
+
+
+            const ampm =
+                hour >= 12
+                    ? "PM"
+                    : "AM";
+
+
+            hour =
+                hour % 12;
+
+
+            if (hour === 0) {
+
+                hour = 12;
+
+            }
+
+
+            return `${hour} ${ampm}`;
+
+        }
+
+
+
+        function createTimeLabels(
+            elementId,
+            times
+        ) {
+
+
+            const container =
+                document.getElementById(
+                    elementId
+                );
+
+
+            container.innerHTML = "";
+
+
+            times.forEach(
+                timeString => {
+
+
+                    const date =
+                        new Date(
+                            timeString
+                        );
+
+
+                    const span =
+                        document.createElement(
+                            "span"
+                        );
+
+
+                    span.textContent =
+                        formatHour(date);
+
+
+                    container.appendChild(
+                        span
+                    );
+
+                }
+            );
+
+        }
+
+
+
+        /*
+         * =========================================================
+         * GET WEATHER
+         * =========================================================
+         */
+
+
+        async function getWeather() {
+
+
+            const status =
+                document.getElementById(
+                    "status"
+                );
+
+
+            try {
+
+
+                status.textContent =
+                    "Loading weather...";
+
+
+                status.classList.remove(
+                    "error"
+                );
+
+
+
+                /*
+                 * Ask Open-Meteo for the forecast.
+                 */
+
+
+                const response =
+                    await fetch(API_URL);
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        "Weather service returned an error."
+                    );
+
+                }
+
+
+                const data =
+                    await response.json();
+
+
+
+                /*
+                 * The API gives us arrays:
+                 *
+                 * data.hourly.time
+                 * data.hourly.precipitation_probability
+                 * data.hourly.weather_code
+                 * data.hourly.is_day
+                 */
+
+
+                const times =
+                    data.hourly.time;
+
+
+                const rain =
+                    data.hourly
+                        .precipitation_probability;
+
+
+                const weatherCodes =
+                    data.hourly.weather_code;
+
+
+                const isDay =
+                    data.hourly.is_day;
+
+
+
+                /*
+                 * =================================================
+                 * FIND TODAY
+                 * =================================================
+                 *
+                 * Open-Meteo gives the forecast in the
+                 * location's local timezone because we used
+                 * timezone=auto.
+                 *
+                 * The first 24 entries therefore represent
+                 * today's 24 hours.
+                 */
+
+
+                const todayTimes =
+                    times.slice(0, 24);
+
+
+                const tomorrowTimes =
+                    times.slice(24, 48);
+
+
+                const todayRain =
+                    rain.slice(0, 24);
+
+
+                const tomorrowRain =
+                    rain.slice(24, 48);
+
+
+                const todayCodes =
+                    weatherCodes.slice(0, 24);
+
+
+                const tomorrowCodes =
+                    weatherCodes.slice(24, 48);
+
+
+                const todayIsDay =
+                    isDay.slice(0, 24);
+
+
+                const tomorrowIsDay =
+                    isDay.slice(24, 48);
+
+
+
+                /*
+                 * =================================================
+                 * CURRENT HOUR
+                 * =================================================
+                 */
+
+
+                const now =
+                    new Date();
+
+
+                const currentHour =
+                    now.getHours();
+
+
+
+                /*
+                 * =================================================
+                 * DRAW EVERYTHING
+                 * =================================================
+                 */
+
+
+                drawGraph(
+                    "today-graph",
+
+                    todayRain,
+
+                    true,
+
+                    currentHour
+                );
+
+
+                drawGraph(
+                    "tomorrow-graph",
+
+                    tomorrowRain,
+
+                    false,
+
+                    null
+                );
+
+
+
+                createIcons(
+                    "today-icons",
+
+                    todayCodes,
+
+                    todayIsDay
+                );
+
+
+                createIcons(
+                    "tomorrow-icons",
+
+                    tomorrowCodes,
+
+                    tomorrowIsDay
+                );
+
+
+
+                createTimeLabels(
+                    "today-times",
+
+                    todayTimes
+                );
+
+
+                createTimeLabels(
+                    "tomorrow-times",
+
+                    tomorrowTimes
+                );
+
+
+
+                /*
+                 * Everything worked.
+                 */
+
+
+                status.textContent =
+                    "Weather updated";
+
+
+                /*
+                 * Hide the status message after
+                 * a few seconds.
+                 */
+
+
+                setTimeout(
+                    () => {
+
+                        status.textContent = "";
+
+                    },
+                    5000
+                );
+
+
+            }
+            catch (error) {
+
+
+                console.error(
+                    error
+                );
+
+
+                status.textContent =
+                    "Unable to load weather.";
+
+
+                status.classList.add(
+                    "error"
+                );
+
+            }
+
+        }
+
+
+
+        /*
+         * =========================================================
+         * START
+         * =========================================================
+         */
+
+
+        getWeather();
+
+
+
+        /*
+         * =========================================================
+         * AUTOMATIC REFRESH
+         * =========================================================
+         *
+         * Update every 30 minutes.
+         */
+
+
+        setInterval(
+            getWeather,
+            30 * 60 * 1000
+        );
+
+
+    </script>
+
+
+</body>
+
+</html>
