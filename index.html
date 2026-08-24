@@ -58,7 +58,7 @@
 
         .day-title {
 
-            font-size: clamp(10px, 5vw, 20px);
+            font-size: clamp(8px, 5vw, 8px);
 
             font-weight: bold;
 
@@ -66,11 +66,26 @@
 
         }
 
+        .graph-container {
+            display: grid;
+            grid-template-columns: 60px 1fr;
+
+            width: 100%;
+            height: 300px;
+        }
+
+
+        .y-axis {
+            width: 60px;
+            height: 300px;
+        }
+
+
 
         .graph {
 
             width: 100%;
-            min-width: 750px;   /* Will never shrink below 300px */
+            min-width: 690px;   /* Will never shrink below 300px */
             
             height: 300px;
 
@@ -89,9 +104,9 @@
 
             margin-top: 5px;
 
-            padding-left: 60px;
+
             padding-right: 10px;
-            min-width: 750px; 
+            min-width: 690px; 
         }
 
 
@@ -107,9 +122,9 @@
 
             margin-top: 5px;
 
-            padding-left: 60px;
+
             padding-right: 10px;
-            min-width: 750px; 
+            min-width: 690px; 
 
         }
 
@@ -134,42 +149,7 @@
         }
 
 
-        @media (max-width: 600px) {
 
-            .weather-display {
-
-                padding: 20px 15px 30px;
-
-                gap: 35px;
-
-            }
-
-
-            .graph {
-
-                height: 300px;
-
-            }
-
-
-            .weather-icons {
-
-                font-size: 20px;
-
-                padding-left: 40px;
-
-            }
-
-
-            .time-labels {
-
-                font-size: 13px;
-
-                padding-left: 40px;
-
-            }
-
-        }
 
     </style>
 
@@ -191,24 +171,41 @@
             </div>
 
 
-            <svg
-                id="today-graph"
-                class="graph"
-                viewBox="0 0 1000 300"
-                preserveAspectRatio="none">
-            </svg>
+            <div class="graph-container">
+
+                <svg
+                    id="today-y-axis"
+                    class="y-axis"
+                    viewBox="0 0 60 300">
+                </svg>
 
 
-            <div
-                id="today-icons"
-                class="weather-icons">
+                <div class="graph-area">
+
+                    <svg
+                        id="today-graph"
+                        class="graph"
+                        viewBox="0 0 1000 300"
+                        preserveAspectRatio="none">
+                    </svg>
+                    
+                    <div
+                        id="today-icons"
+                        class="weather-icons">
+                    </div>
+
+
+                    <div
+                        id="today-times"
+                        class="time-labels">
+                    </div>
+
+                </div>
+
             </div>
 
 
-            <div
-                id="today-times"
-                class="time-labels">
-            </div>
+
 
         </section>
 
@@ -223,24 +220,41 @@
             </div>
 
 
-            <svg
-                id="tomorrow-graph"
-                class="graph"
-                viewBox="0 0 1000 300"
-                preserveAspectRatio="none">
-            </svg>
+            <div class="graph-container">
+
+                <svg
+                    id="tomorrow-y-axis"
+                    class="y-axis"
+                    viewBox="0 0 60 300">
+                </svg>
 
 
-            <div
-                id="tomorrow-icons"
-                class="weather-icons">
+                <div class="graph-area">
+
+                    <svg
+                        id="tomorrow-graph"
+                        class="graph"
+                        viewBox="0 0 1000 300"
+                        preserveAspectRatio="none">
+                    </svg>
+
+                    <div
+                        id="tomorrow-icons"
+                        class="weather-icons">
+                    </div>
+
+
+                    <div
+                        id="tomorrow-times"
+                        class="time-labels">
+                    </div>
+
+                </div>
+
             </div>
 
 
-            <div
-                id="tomorrow-times"
-                class="time-labels">
-            </div>
+
 
         </section>
 
@@ -521,6 +535,7 @@
 
         function drawGraph(
             elementId,
+            yAxisId,
             values,
             showNow,
             currentHourIndex
@@ -533,7 +548,13 @@
                 );
 
 
+            const yAxis =
+                document.getElementById(
+                    yAxisId
+                );
+
             svg.innerHTML = "";
+            yAxis.innerHTML = "";
 
 
             /*
@@ -545,9 +566,9 @@
 
             const height = 300;
 
-            const left = 60;
+            const left = 10;
 
-            const right = 10;
+            const right = 30;
 
             const top = 35;
 
@@ -645,16 +666,16 @@
 
 
                     /*
-                     * Percentage label.
-                     */
-
+                    * Y-axis percentage label.
+                    *
+                    * This belongs to the Y-AXIS SVG.
+                    */
 
                     const label =
                         createSvgElement(
                             "text",
                             {
-
-                                x: 5,
+                                x: 55,
 
                                 y: y + 7,
 
@@ -666,19 +687,16 @@
                                     "Arial",
 
                                 "text-anchor":
-                                    "start"
-
+                                    "end"
                             }
                         );
 
 
                     label.textContent =
-                        `${Math.round(
-                            value * 100
-                        )}%`;
+                        `${Math.round(value * 100)}%`;
 
 
-                    svg.appendChild(label);
+                    yAxis.appendChild(label);
 
                 }
             );
@@ -1238,6 +1256,8 @@
                 drawGraph(
                     "today-graph",
 
+                    "today-y-axis",
+
                     todayRain,
 
                     true,
@@ -1248,6 +1268,8 @@
 
                 drawGraph(
                     "tomorrow-graph",
+
+                    "tomorrow-y-axis",
 
                     tomorrowRain,
 
